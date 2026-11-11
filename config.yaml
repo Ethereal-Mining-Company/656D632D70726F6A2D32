@@ -1,0 +1,34 @@
+test_mode: false
+paths:
+  dataset: "data/digits_dataset.csv"
+  model_dir: "artifacts"
+
+features:
+  target_col: "target_digit"
+
+evaluation_params:
+  cv_folds: 5
+  global_seed: 42 
+
+experiment_setup:
+  - name: "knn"
+    module_path: "sklearn.neighbors"
+    class_name: "KNeighborsClassifier"
+    param_key: "knn_params"
+  - name: "svc"
+    module_path: "sklearn.svm"
+    class_name: "SVC"
+    param_key: "svc_params"
+  - name: "gnb"
+    module_path: "sklearn.naive_bayes"
+    class_name: "GaussianNB"
+    param_key: "gnb_params"
+
+model_params:
+  knn_params:
+    n_neighbors: [3, 5, 7]
+    weights: ["uniform", "distance"]
+  svc_params:
+    C: [0.1, 1, 10]
+    gamma: ["scale", "auto"]
+  gnb_params: {}
