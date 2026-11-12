@@ -2,14 +2,13 @@ test_mode: false
 paths:
   dataset: "data/digits_dataset.csv"
   model_dir: "artifacts"
-
+  log_dir: "logs"
 features:
   target_col: "target_digit"
-
 evaluation_params:
+  test_size: 0.2
   cv_folds: 5
   global_seed: 42 
-
 experiment_setup:
   - name: "knn"
     module_path: "sklearn.neighbors"
@@ -23,10 +22,9 @@ experiment_setup:
     module_path: "sklearn.naive_bayes"
     class_name: "GaussianNB"
     param_key: "gnb_params"
-
 model_params:
   knn_params:
-    n_neighbors: [3, 5, 7]
+    n_neighbors: [3, 5, 7, 9]
     weights: ["uniform", "distance"]
   svc_params:
     C: [0.1, 1, 10]
