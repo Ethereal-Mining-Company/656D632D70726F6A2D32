@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import ConfusionMatrixDisplay
 
@@ -45,5 +46,25 @@ def plot_custom_predictions(X_custom, y_true, predictions, filenames):
         ax.set_title(f"{name}\nTrue: {true_val} | Pred: {pred_val}\n[{status}]", color=color, fontweight="bold")
         ax.axis("off")
     plt.suptitle(f"Custom Handwriting Accuracy: {correct_count}/{count} ({correct_count / count:.0%})", y=1.05, fontweight="bold")
+    plt.tight_layout()
+    plt.show()
+
+def plot_xor_decision_boundary(model, X, y, title="XOR MLP Decision Boundary"):
+    grid_vals = np.linspace(-0.2, 1.2, 200)
+    xx, yy = np.meshgrid(grid_vals, grid_vals)
+    grid_points = np.c_[xx.ravel(), yy.ravel()]
+    
+    probs = model.predict(grid_points, verbose=0).reshape(xx.shape)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    contour = ax.contourf(xx, yy, probs, levels=20, cmap="RdBu_r", alpha=0.8)
+    plt.colorbar(contour, ax=ax, label="Predicted Probability (Class 1)")
+
+    ax.scatter(
+        X["x1"], X["x2"], c=y, cmap="RdBu_r", edgecolors="black", s=140, zorder=3
+    )
+    ax.set_title(title)
+    ax.set_xlabel("Input x1")
+    ax.set_ylabel("Input x2")
     plt.tight_layout()
     plt.show()
