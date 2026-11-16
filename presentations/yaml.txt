@@ -3,9 +3,26 @@ test_mode: false
 paths:
   digits_dataset: "data/digits_dataset.csv"
   xor_dataset: "data/xor_dataset.csv"
+  cifar10_dataset: "data/cifar10_dataset.csv"
+  custom_images_dir: "images"
   model_dir: "artifacts"
   log_dir: "logs"
   log_file: "experiment_results.csv"
+
+paths:
+  digits_dataset: "data/digits_dataset.csv"
+  xor_dataset: "data/xor_dataset.csv"
+  cifar10_dataset: "data/cifar10_dataset.csv"
+  model_dir: "artifacts"
+  log_dir: "logs"
+  log_file: "experiment_results.csv"
+
+datasets:
+  cifar10_dataset:
+    target_col: "target_class"
+    image_shape: [32, 32, 3]
+    num_classes: 10
+    class_names: ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
 features:
   target_col: "target_digit"
@@ -57,3 +74,36 @@ models:
       hidden_units: [4, 8]
       hidden_activation: ["relu", "tanh"]
       learning_rate: [0.01, 0.05]
+  
+  cifar_ann:
+    description: "ANN"
+    module_path: "src.pipeline"
+    class_name: "build_cifar_ann"
+    dataset_key: "cifar10_dataset"
+    target_col: "target_class"
+    artifact_format: "keras"
+    skip_kfold: true
+    fit_params:
+      epochs: 25
+      batch_size: 64
+      verbose: 1
+    params:
+      hidden_units: [512]
+      learning_rate: [0.001]
+
+  cifar_cnn:
+    description: "CNN"
+    module_path: "src.pipeline"
+    class_name: "build_cifar_cnn"
+    dataset_key: "cifar10_dataset"
+    target_col: "target_class"
+    artifact_format: "keras"
+    skip_kfold: true
+    fit_params:
+      epochs: 25
+      batch_size: 64
+      verbose: 1
+    params:
+      filters: [32]
+      dropout_rate: [0.25]
+      learning_rate: [0.001]
