@@ -68,3 +68,38 @@ def plot_xor_decision_boundary(model, X, y, title="XOR MLP Decision Boundary"):
     ax.set_ylabel("Input x2")
     plt.tight_layout()
     plt.show()
+
+def plot_sample_images(X, y, class_names=None, image_shape=(32, 32, 3), count=10):
+    fig, axes = plt.subplots(1, count, figsize=(14, 2.2))
+    for i, ax in enumerate(axes):
+        ax.imshow(X.iloc[i].values.reshape(tuple(image_shape)))
+        label_idx = int(y.iloc[i])
+        title = class_names[label_idx] if class_names else str(label_idx)
+        ax.set_title(title, fontsize=9)
+        ax.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+def plot_experiment_comparison(results_df, title="Model Comparison"):
+    ax = results_df.plot(kind="bar", x="engine_type", y=["mean_cv_accuracy", "final_test_score"], ylim=(0.0, 1.0), figsize=(7, 4.5))
+    ax.set_title(title)
+    ax.set_ylabel("Accuracy")
+    ax.set_xlabel("Model Architecture")
+    plt.xticks(rotation=0)
+    plt.tight_layout()
+    plt.show()
+
+def plot_custom_rgb_predictions(X_custom, y_true, predictions, filenames, class_names, image_shape=(32, 32, 3), model_name="Model"):
+    count = len(X_custom)
+    correct_count = sum(int(t == p) for t, p in zip(y_true, predictions))
+    fig, axes = plt.subplots(1, count, figsize=(3 * count, 3.6), squeeze=False)
+    for ax, (_, row), true_idx, pred_idx, name in zip(axes.ravel(), X_custom.iterrows(), y_true, predictions, filenames):
+        is_right = (true_idx == pred_idx)
+        status = "CORRECT" if is_right else "WRONG"
+        color = "green" if is_right else "red"
+        ax.imshow(row.values.reshape(tuple(image_shape)))
+        ax.set_title(f"{name}\nTrue: {class_names[int(true_idx)]}\nPred: {class_names[int(pred_idx)]}\n[{status}]", color=color, fontweight="bold", fontsize=9)
+        ax.axis("off")
+    plt.suptitle(f"{model_name} Custom Image Accuracy: {correct_count}/{count} ({correct_count / count:.0%})", y=1.05, fontweight="bold")
+    plt.tight_layout()
+    plt.show()

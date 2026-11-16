@@ -1,4 +1,4 @@
-import os, joblib, yaml, importlib
+import os, json, joblib, yaml, importlib, keras
 import pandas as pd
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
@@ -12,10 +12,12 @@ def load_config(config_path="config.yaml"):
 def load_bundle(model_folder, run_uuid, name, is_test=False):
     run_mode = "testing" if is_test else "production"
     prefix = "test_" if is_test else ""
-    path = os.path.join(model_folder, run_mode, f"{prefix}{name}_{run_uuid}.pkl")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"No saved bundle found at {path}")
-    return joblib.load(path)
+    base = os.path.join(model_folder, run_mode, f"{prefix}{name}_{run_uuid}")
+    if os.path.exists(f"{base}.pkl"):
+        return joblib.load(f"{base}.pkl")
+    if os.path.exists(f"{base}.keras"):
+        return load_keras_bundle(model_folder, run_uuid, name, is_test=is_test)
+    raise FileNotFoundError(f"No saved bundle found at {base}.pkl or {base}.keras")
 
 def export_sklearn_dataset(loader_name, target_file_name, target_col_name="target"):
     os.makedirs("data", exist_ok=True)
@@ -36,11 +38,13 @@ def load_and_preprocess_images(folder_path="images"):
     }
     exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
     filenames = sorted(f for f in os.listdir(folder_path) if f.lower().endswith(exts))
-    rows = list()
-    y_true = list()
+    rows, y_true, matched_files = [], [], []
     for name in filenames:
         stem, _ = os.path.splitext(name)
         word = stem.lower().split("_")[0].split("-")[0]
+        if word not in word_to_num and not word.isdigit():
+            continue
+        matched_files.append(name)
         y_true.append(word_to_num[word] if word in word_to_num else int(word))
         img = ImageOps.invert(ImageOps.exif_transpose(Image.open(os.path.join(folder_path, name))).convert("L"))
         arr = np.array(img, dtype=float)
@@ -56,4 +60,65 @@ def load_and_preprocess_images(folder_path="images"):
             img = Image.fromarray(sq.astype(np.uint8)).resize((64, 64), Image.Resampling.BILINEAR).filter(ImageFilter.MaxFilter(3))
         a8 = np.array(img.resize((8, 8), Image.Resampling.BILINEAR), dtype=float)
         rows.append(((a8 / a8.max()) * 16.0 if a8.max() > 0 else a8).reshape(64))
-    return pd.DataFrame(rows, columns=[str(i) for i in range(64)]), pd.Series(y_true, name="true_digit"), filenames
+    return pd.DataFrame(rows, columns=[str(i) for i in range(64)]), pd.Series(y_true, name="true_digit"), matched_files
+
+def load_keras_bundle(model_folder, run_uuid, name, is_test=False, config_path="config.yaml"):
+    cfg = load_config(config_path)
+    run_mode = "testing" if is_test else "production"
+    prefix = "test_" if is_test else ""
+    path = os.path.join(model_folder, run_mode, f"{prefix}{name}_{run_uuid}.keras")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"No saved Keras model found at {path}")
+    log_path = os.path.join(cfg["paths"]["log_dir"], cfg["paths"]["log_file"])
+    meta = {}
+    if os.path.exists(log_path):
+        logs = pd.read_csv(log_path)
+        match = logs[(logs["run_uuid"] == run_uuid) & (logs["engine_type"] == name)]
+        if not match.empty:
+            raw_meta = match.iloc[-1]["all_model_parameters"]
+            meta = json.loads(raw_meta) if isinstance(raw_meta, str) and raw_meta.startswith("{") else {}
+            if isinstance(meta.get("validation_metrics", {}).get("all_tuning_runs"), list):
+                meta["validation_metrics"]["all_tuning_runs"] = pd.DataFrame(meta["validation_metrics"]["all_tuning_runs"])
+    return {"model": keras.models.load_model(path), "metadata": meta}
+
+def export_keras_dataset(dataset_name="cifar10", dataset_key="cifar10_dataset", config_path="config.yaml", sample_limit=None):
+    cfg = load_config(config_path)
+    csv_out_path = cfg["paths"][dataset_key]
+    target_col = cfg.get("datasets", {}).get(dataset_key, {}).get("target_col", "target_class")
+    os.makedirs(os.path.dirname(csv_out_path) or "data", exist_ok=True)
+    loader = getattr(keras.datasets, dataset_name)
+    (X_train, y_train), (X_test, y_test) = loader.load_data()
+    X = np.concatenate([X_train, X_test], axis=0).astype("float32") / 255.0
+    y = np.concatenate([y_train, y_test], axis=0).reshape(-1)
+    if sample_limit is not None:
+        X, y = X[:sample_limit], y[:sample_limit]
+    X_flat = X.reshape(X.shape[0], -1)
+    df = pd.DataFrame(X_flat, columns=[f"px_{i}" for i in range(X_flat.shape[1])])
+    df[target_col] = y
+    df.to_csv(csv_out_path, index=False)
+    print(f"Success! Exported '{dataset_name}' ({len(df)} rows) into '{csv_out_path}'")
+    return csv_out_path
+
+def load_and_preprocess_rgb_images(folder_path=None, dataset_key="cifar10_dataset", config_path="config.yaml"):
+    cfg = load_config(config_path)
+    folder = folder_path or cfg["paths"].get("custom_images_dir", "images")
+    ds_cfg = cfg["datasets"][dataset_key]
+    class_names = [c.lower() for c in ds_cfg["class_names"]]
+    h, w, c = ds_cfg["image_shape"]
+    exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+    rows, y_true, matched_files = [], [], []
+    for name in sorted(os.listdir(folder)):
+        if not name.lower().endswith(exts):
+            continue
+        stem = os.path.splitext(name)[0].lower()
+        prefix = "".join(ch for ch in stem.split("_")[0].split("-")[0] if ch.isalpha())
+        if prefix in class_names:
+            y_true.append(class_names.index(prefix))
+            matched_files.append(name)
+            img = ImageOps.exif_transpose(Image.open(os.path.join(folder, name))).convert("RGB").resize((w, h), Image.Resampling.BILINEAR)
+            arr = (np.array(img, dtype="float32") / 255.0).reshape(h * w * c)
+            rows.append(arr)
+    if not rows:
+        raise ValueError(f"No images matching {class_names} found in '{folder}'. Name files like 'cat_1.jpg' or 'airplane.png'.")
+    cols = [f"px_{i}" for i in range(h * w * c)]
+    return pd.DataFrame(rows, columns=cols), pd.Series(y_true, name=ds_cfg["target_col"]), matched_files
