@@ -1,5 +1,3 @@
-x1,x2,target_xor
-0,0,0
-0,1,1
-1,0,1
-1,1,0
+version https://git-lfs.github.com/spec/v1
+oid sha256:2978c18356c34c94711e26368c5705c537c73bfe44b4bb00acfb2bca1a80e3ad
+size 41
